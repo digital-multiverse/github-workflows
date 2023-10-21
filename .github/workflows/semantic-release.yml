@@ -26,36 +26,52 @@ jobs:
   semantic-release:
     name: Semantic Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       version: ${{ steps.semantic.new_release_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-
-      - name: Allow version on branch for dry_run
-        if: ${{ inputs.dry_run }}
-        run: echo "GITHUB_BRANCH=$(echo "${GITHUB_REF}" | sed 's/refs\/heads\///g')" >> "${GITHUB_ENV}"
 
       - name: Semantic Release
         id: semantic
         uses: cycjimmy/semantic-release-action@v4
         with:
-          branches: ${{ env.GITHUB_BRANCH }}
-          dry_run: ${{ inputs.dry_run }}
           semantic_version: 21.1.1
           extra_plugins: |
+            @semantic-release/commit-analyzer@11
+            @semantic-release/release-notes-generator@12
             @semantic-release/changelog@6
             @semantic-release/git@10
-            conventional-changelog-conventionalcommit@5
+            conventional-changelog-conventionalcommits@5
+            @semantic-release/github@9
+          branches: |
+            [
+              '+([0-9])?(.{+([0-9]),x}).x',
+              'main',
+              'next',
+              'next-major',
+              {
+                name: 'beta',
+                prerelease: true
+              },
+              {
+                name: 'alpha',
+                prerelease: true
+              }
+            ]
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           HUSKY: 0
 
       - name: Version of Job Summary
