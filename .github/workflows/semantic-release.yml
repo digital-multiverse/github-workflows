@@ -1,0 +1,72 @@
+name: Semantic Release
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node version to run scripts"
+        default: "20.x"
+        required: false
+        type: string
+      dry_run:
+        default: false
+        description: "Generate version output, but DO NOT create a release or tag"
+        type: boolean
+        required: false
+    outputs:
+      version:
+        description: "The version created by semantic-release"
+        value: ${{ jobs.semantic-release.outputs.version }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semantic.new_release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Allow version on branch for dry_run
+        if: ${{ inputs.dry_run }}
+        run: echo "GITHUB_BRANCH=$(echo "${GITHUB_REF}" | sed 's/refs\/heads\///g')" >> "${GITHUB_ENV}"
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          branches: ${{ env.GITHUB_BRANCH }}
+          dry_run: ${{ inputs.dry_run }}
+          semantic_version: 21.1.1
+          extra_plugins: |
+            @semantic-release/changelog@6
+            @semantic-release/git@10
+            conventional-changelog-conventionalcommit@5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HUSKY: 0
+
+      - name: Version of Job Summary
+        env:
+          VERSION: ${{ steps.semantic.outputs.new_release_version }}
+        run: |
+          if [[ -z "${VERSION}" ]]; then
+            echo "### NO COMMITS TRIGGER A RELEASE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### New Version > ${VERSION}" >> $GITHUB_STEP_SUMMARY
+            if "${{ inputs.dry_run }}"; then
+              echo " (not yet created because this was a dry_run)" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
