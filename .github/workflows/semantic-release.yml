@@ -3,19 +3,11 @@ name: Semantic Release
 on:
   workflow_call:
     inputs:
-      node-version:
-        description: "Node version to run scripts"
-        default: "20.x"
-        required: false
-        type: string
-      dry_run:
-        default: false
-        description: "Generate version output, but DO NOT create a release or tag"
-        type: boolean
-        required: false
+      node-version: { description: "Node.js version", default: "24", required: false, type: string }
+      dry_run: { description: "Compute the version but do NOT create a release or tag", default: false, required: false, type: boolean }
     outputs:
       version:
-        description: "The version created by semantic-release"
+        description: "Version created by semantic-release"
         value: ${{ jobs.semantic-release.outputs.version }}
 
 defaults:
@@ -27,62 +19,44 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      issues: write
+      pull-requests: write
       packages: write
     outputs:
-      version: ${{ steps.semantic.new_release_version }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - uses: actions/setup-node@v4
+      - name: Enable Corepack (Yarn Berry)
+        run: corepack enable
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
-
+          cache: yarn
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6
         with:
-          semantic_version: 21.1.1
+          dry_run: ${{ inputs.dry_run }}
+          semantic_version: 25
           extra_plugins: |
-            @semantic-release/commit-analyzer@11
-            @semantic-release/release-notes-generator@12
+            @semantic-release/commit-analyzer@13
+            @semantic-release/release-notes-generator@14
             @semantic-release/changelog@6
             @semantic-release/git@10
-            conventional-changelog-conventionalcommits@5
-            @semantic-release/github@9
+            @semantic-release/github@12
+            conventional-changelog-conventionalcommits@9
           branches: |
             [
               '+([0-9])?(.{+([0-9]),x}).x',
-              'main',
-              'next',
-              'next-major',
-              {
-                name: 'beta',
-                prerelease: true
-              },
-              {
-                name: 'alpha',
-                prerelease: true
-              }
+              'main', 'next', 'next-major',
+              { name: 'beta',  prerelease: true },
+              { name: 'alpha', prerelease: true }
             ]
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           HUSKY: 0
-
-      - name: Version of Job Summary
-        env:
-          VERSION: ${{ steps.semantic.outputs.new_release_version }}
-        run: |
-          if [[ -z "${VERSION}" ]]; then
-            echo "### NO COMMITS TRIGGER A RELEASE" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### New Version > ${VERSION}" >> $GITHUB_STEP_SUMMARY
-            if "${{ inputs.dry_run }}"; then
-              echo " (not yet created because this was a dry_run)" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi

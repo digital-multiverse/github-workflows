@@ -1,0 +1,49 @@
+name: CI
+
+# Reusable workflow for JS/TS (Yarn Berry): lint + type-check + test.
+# Runs the ROOT scripts; in a monorepo those scripts should fan out to the workspaces
+# (e.g. with Turborepo or `yarn workspaces foreach`).
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version"
+        default: "24"
+        required: false
+        type: string
+      node-version-file:
+        description: "Path to a file with the Node.js version (.nvmrc). Takes precedence."
+        default: ""
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint · Types · Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enable Corepack (Yarn Berry)
+        run: corepack enable
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Lint
+        run: yarn run lint:check
+      - name: Type-check
+        run: yarn run typecheck
+      - name: Test
+        run: yarn test

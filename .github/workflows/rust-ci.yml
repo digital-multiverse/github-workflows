@@ -1,0 +1,49 @@
+name: Rust CI
+
+# Reusable workflow for Rust: format + clippy + test over the Cargo workspace.
+
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        description: "Rust toolchain"
+        default: "stable"
+        required: false
+        type: string
+      working-directory:
+        description: "Root of the Cargo workspace (where Cargo.toml [workspace] lives)"
+        default: "."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-ci:
+    name: fmt · clippy · test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ inputs.working-directory }}
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --all --all-features
